@@ -1,6 +1,6 @@
 //const { update } = require("immutable")
 
-let store = {
+let store = Immutable.fromJS({
   apod: "",
   rovers: ["Curiosity", "Opportunity", "Spirit"],
   activeRover: {
@@ -8,15 +8,18 @@ let store = {
     photos: [],
     manifest: {},
   },
-};
+});
 
 // add our markup to the page
 const root = document.getElementById("root");
 
-const updateStore = (store, newState) => {
-  store = Object.assign(store, newState);
-  console.log(store);
-  render(root, store);
+const updateStore = (state, newState) => {
+  const bothApiCallsFetched = state =>
+    state.activeRover.photos.length !== 0 &&
+    Object.keys(state.activeRover.manifest).length !== 0;
+
+  store = state.mergeDeep(newState);
+  if (bothApiCallsFetched(store.toJS())) render(root, store);
 };
 
 const render = async (root, state) => {
@@ -25,22 +28,24 @@ const render = async (root, state) => {
 
 // create content
 const App = state => {
-  let { rovers, activeRover } = state;
+  const {
+    activeRover: { name, photos, manifest },
+    rovers,
+  } = state.toJS();
 
   return `
-        <header></header>
-        <main>
-            ${ActiveRover(activeRover.name)}
-            <section>
-                <h3>Put things on the page!</h3>
-                <p>${RoverPhotos(activeRover.photos)}</p>
-                <p>${RoverManifest(activeRover.manifest)}</p>
-                </section>
-                </main>
-                <footer></footer>
-                `;
-            };
-            
+  <header></header>
+  <main>
+    ${ActiveRover(name)}
+    ${RoverSelector(rovers)}
+    <section>
+      <p>${RoverManifest(manifest)}</p>
+      <p>${RoverPhotos(photos)}</p>
+    </section>
+  </main>
+  <footer></footer>
+  `;
+};
 
 // listening for load event because page should load before any JS is called
 window.addEventListener("load", () => {
@@ -49,20 +54,20 @@ window.addEventListener("load", () => {
 
 // ------------------------------------------------------  COMPONENTS
 
-// Pure function that renders conditional information -- THIS IS JUST AN EXAMPLE, you can delete it.
-const ActiveRover = activeRover => {
-  if (activeRover) {
-    return `
-            <h1>${activeRover}</h1>
-        `;
-  }
-
+const RoverSelector = rovers => {
   return `
-        <h1>Hello!</h1>
-    `;
+  <select>
+    ${rovers.map(rover => `<option>${rover}</option>`)}
+  </select>
+  `;
 };
 
-// Example of a pure function that renders infomation requested from the backend
+// Pure function that renders conditional information
+const ActiveRover = name => {
+  return name ? `<h1>${name}</h1>` : null;
+};
+
+// Pure function that renders infomation requested from the backend
 
 const RoverPhotos = photos => {
   const PhotoElement = photo => {
@@ -73,7 +78,9 @@ const RoverPhotos = photos => {
     </li>
     `;
   };
-  if (photos.length === 0) getRoverPhotosOfTheDay(store);
+
+  if (photos.length === 0) getRoverPhotosOfTheDay();
+
   return `
     <ul>
         ${photos.map(photo => PhotoElement(photo))}
@@ -88,7 +95,9 @@ const RoverManifest = manifest => {
         <span>${value}</span>
     </li>`;
   };
-  if (Object.values(manifest).length === 0) getRoverManifest(store);
+
+  if (Object.keys(manifest).length === 0) getRoverManifest();
+
   return `
     <ul>
         ${Object.values(manifest).map(value => ManifestElement(value))}
@@ -96,85 +105,31 @@ const RoverManifest = manifest => {
     `;
 };
 
-const ImageOfTheDay = apod => {
-  // If image does not already exist, or it is not from today -- request it again
-  const today = new Date();
-  const photodate = apod.date && new Date(apod.date);
-  //  console.log(photodate.getDate(), today.getDate());
-  console.log(apod);
-  // console.log(photodate.getDate() === today.getDate());
-  if (!apod || apod.date === today.getDate()) {
-    getImageOfTheDay(store);
-  }
-
-  // check if the photo of the day is actually type video!
-  if (apod.media_type === "video") {
-    return `
-        <p>See today's featured video <a href="${apod.url}">here</a></p>
-        <p>${apod.title}</p>
-        <p>${apod.explanation}</p>
-        `;
-  } else {
-    return `
-        <img src="${apod.url}" height="350px" width="100%" />
-        <p>${apod.explanation}</p>
-        `;
-  }
-};
-
 // ------------------------------------------------------  API CALLS
 
-// Example API call
-const getImageOfTheDay = state => {
-  let { apod } = state;
-
-  fetch(`http://localhost:3000/apod`)
-    .then(res => res.json())
-    .then(apod => {
-      apod = apod.image;
-      // console.log(apod)
-      updateStore(store, { apod });
-    });
-
-  return apod;
-};
-
-const getRoverPhotosOfTheDay = async state => {
-  let {
-    activeRover: { name, photos, manifest },
-  } = state;
-  let date = new Date().toISOString().slice(0, 10);
-  date = "2021-04-24";
+const getRoverPhotosOfTheDay = async () => {
   try {
-    const response = await fetch(
-      `http://localhost:3000/photos/${name}/${date}`
-    );
+    const name = store.getIn(["activeRover", "name"]);
+    const response = await fetch(`http://localhost:3000/photos/${name}`);
     const roverPhotos = await response.json();
-    photos = roverPhotos.photos.photos;
-    updateStore(store, { activeRover: { name, photos, manifest } });
+
+    const photos = roverPhotos.photos.latest_photos;
+    updateStore(store, { activeRover: { photos } });
   } catch (error) {
     console.log(error);
   }
 };
 
-const getRoverManifest = async state => {
-  let {
-    activeRover: { name, photos, manifest },
-  } = state;
-  let date = new Date().toISOString().slice(0, 10);
-  date = "2021-04-24";
+const getRoverManifest = async () => {
   try {
+    const name = store.getIn(["activeRover", "name"]);
     const response = await fetch(`http://localhost:3000/manifest/${name}`);
     const roverManifest = await response.json();
-    console.log(roverManifest);
 
     const manifest = roverManifest.manifest.photo_manifest;
-    delete manifest.photos
-    
-    updateStore(store, { activeRover : {name, photos, manifest } });
+    delete manifest.photos;
+    updateStore(store, { activeRover: { manifest } });
   } catch (error) {
     console.log(error);
   }
 };
-
-// photo_manifest":{"name":"Curiosity","landing_date":"2012-08-06","launch_date":"2011-11-26","status":"active","max_sol":3098,"max_date":"2021-04-24","total_photos":489145,
