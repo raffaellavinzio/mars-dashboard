@@ -20,6 +20,22 @@ footer {
   /* footer styles */
 }
 
+ul {
+  list-style: none;
+  display: flex;
+  flex-wrap: 1;
+}
+
+ul li {
+  width: 30%;
+}
+
+img {
+  width: 100%;
+  height: 100%;
+  object-fit: cover;
+}
+
 /* -------------------  TABLET  --------------------- */
 @media (min-width: 768px) {
   /* use mobile */
