@@ -21,7 +21,7 @@ const render = async (root, state) => {
   root.innerHTML = App(state);
 };
 
-// create content
+// HOF to create content
 const App = state => {
   const { activeRover, roversData, rovers } = state.toJS();
   const activeRoverData =
@@ -31,13 +31,13 @@ const App = state => {
   <header>Mars Rovers</header>
   <main>
     <aside>
-    ${RoverSelector(rovers, activeRover)}
+      <nav>${roverNavigation(rovers, activeRover)}</nav>
     </aside>
     <section>
-    ${activeRoverData && RoverPhotos(activeRoverData.photos)}
+      ${activeRoverData && roverPhotos(activeRoverData.photos)}
     </section>
     <article>${
-      activeRoverData && RoverManifest(activeRoverData.manifest)
+      activeRoverData && roverManifest(activeRoverData.manifest)
     }</article>
   </main>
   <footer>Udacity Intermediate Javascript Nanodegree P2</footer>
@@ -45,27 +45,6 @@ const App = state => {
 };
 
 // listening for load event because page should load before any JS is called
-const loadRoversData = async () => {
-  const mergeRoverData = (name, data) => {
-    const output = data.filter(el => el.name === name);
-    return Object.assign(output[0], output[1]);
-  };
-
-  try {
-    const rovers = store.getIn(["rovers"]);
-    const getManifestPromises = rovers.map(name => getRoverManifest(name));
-    const getPhotosPromises = rovers.map(name => getRoverPhotos(name));
-    const results = await Promise.all([
-      ...getManifestPromises,
-      ...getPhotosPromises,
-    ]);
-
-    return rovers.map(name => mergeRoverData(name, results));
-  } catch (error) {
-    throw error; // re-throw the error unchanged
-  }
-};
-
 // DOM event listener is not a pure function because it accesses and changes the global store with update and render
 window.addEventListener("load", async () => {
   const merged = await loadRoversData();
@@ -79,54 +58,45 @@ root.addEventListener("click", async event => {
   if (rovers.includes(event.target.innerHTML))
     updateStore({ activeRover: event.target.innerHTML });
   render(root, store);
-  carousel();
+  slider();
 });
 
 // ------------------------------------------------------  COMPONENTS
 
-// Pure function that renders conditional information
-const RoverSelector = (rovers, activeRover) => {
-  return `
-  <nav>
-    ${rovers
-      .map(rover =>
-        rover === activeRover
-          ? `<span class="active">${rover}</span>`
-          : `<span>${rover}</span>`
-      )
-      .join("")}
-  </nav>
-  `;
+// Pure HOF function that render a list of UI elements
+const listOfElements = (arr, cb, ...args) =>
+  `${arr.map(el => cb(el, ...args)).join("")}`;
+
+// Pure HOF function that render a list of UI elements from Object key:value pairs
+const listOfElementsFromObj = (arr, cb, ...args) =>
+  `${arr.map(([key, value]) => cb(key, value, ...args)).join("")}`;
+
+// Pure HOF function that renders information from the store
+const roverNavigation = (rovers, activeRover) => {
+  const roverNavElement = (rover, activeRover) =>
+    rover === activeRover
+      ? `<span class="active">${rover}</span>`
+      : `<span>${rover}</span>`;
+
+  return listOfElements(rovers, roverNavElement, activeRover);
 };
 
-// Pure function that renders infomation requested from the backend
-const RoverPhotos = photos => {
-  const PhotoElement = photo => {
-    return `
-        <img class="slide" src="${photo.img_src}"/>
-        `;
-  };
-  //  <span>${photo.earth_date}</span>
+// Pure HOF function that renders information requested from the backend
+const roverPhotos = photos => {
+  const photoElement = photo => `<img class="slide" src="${photo.img_src}"/>`;
 
-  return `
-        ${photos.map(photo => PhotoElement(photo)).join("")}
-    `;
+  return listOfElements(photos, photoElement);
 };
 
-const RoverManifest = manifest => {
-  const ManifestElement = (key, value) => {
-    return `
-        <p>
-        ${key.replace('_', ' ').replace('max', 'latest')}
-        <span>${value}</span>
-    </p>`;
-  };
+// Pure HOF function that renders information requested from the backend
+const roverManifest = manifest => {
+  const manifestElement = (key, value) => `
+  <p>
+  ${key.replace("_", " ").replace("max", "latest")}
+  <span>${value}</span>
+  </p>`;
 
-  return `
-        ${Object.entries(manifest)
-          .map(([key, value]) => ManifestElement(key, value))
-          .join("")}
-    `;
+  return listOfElementsFromObj(Object.entries(manifest), manifestElement);
 };
 
 // ------------------------------------------------------  API CALLS
@@ -157,18 +127,42 @@ const getRoverManifest = async rover => {
   }
 };
 
-// ------------------------------------------------------  CAROUSEL
-let slideIndex = 0;
+// async HOF function to load all the data from the API at page load
+const loadRoversData = async () => {
+  const mergeRoverData = (name, data) => {
+    const output = data.filter(el => el.name === name);
+    return Object.assign(output[0], output[1]);
+  };
 
-function carousel() {
-  let x = document.getElementsByClassName("slide");
-  for (let i = 0; i < x.length; i++) {
-    x[i].style.display = "none";
+  try {
+    const rovers = store.getIn(["rovers"]);
+    const getManifestPromises = rovers.map(name => getRoverManifest(name));
+    const getPhotosPromises = rovers.map(name => getRoverPhotos(name));
+    const results = await Promise.all([
+      ...getManifestPromises,
+      ...getPhotosPromises,
+    ]);
+
+    return rovers.map(name => mergeRoverData(name, results));
+  } catch (error) {
+    throw error; // re-throw the error unchanged
   }
-  slideIndex++;
-  if (slideIndex > x.length) {
-    slideIndex = 1;
-  }
-  x[slideIndex - 1].style.display = "block";
-  setTimeout(carousel, 3000);
-}
+};
+
+// ---------CAROUSEL from W3C website (https://www.w3schools.com/w3css/w3css_slideshow.asp)
+// transformed into a pure function IIFE that stores a function reference to slider
+const slider = (() => {
+  let slideIndex = 0;
+  return () => {
+    let x = document.getElementsByClassName("slide");
+    for (let i = 0; i < x.length; i++) {
+      x[i].style.display = "none";
+    }
+    slideIndex++;
+    if (slideIndex > x.length) {
+      slideIndex = 1;
+    }
+    x[slideIndex - 1].style.display = "block";
+    setTimeout(slider, 3000);
+  };
+})();
