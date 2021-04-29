@@ -30,13 +30,17 @@ const App = state => {
   return `
   <header>Mars Rovers</header>
   <main>
-    ${RoverSelector(rovers)}
+    <aside>
+    ${RoverSelector(rovers, activeRover)}
+    </aside>
     <section>
-    <p>${activeRoverData && RoverManifest(activeRoverData.manifest)}</p>
-    <p>${activeRoverData && RoverPhotos(activeRoverData.photos)}</p>
+    ${activeRoverData && RoverPhotos(activeRoverData.photos)}
     </section>
-    </main>
-    <footer></footer>
+    <article>${
+      activeRoverData && RoverManifest(activeRoverData.manifest)
+    }</article>
+  </main>
+  <footer>Udacity Intermediate Javascript Nanodegree P2</footer>
     `;
 };
 
@@ -75,16 +79,23 @@ root.addEventListener("click", async event => {
   if (rovers.includes(event.target.innerHTML))
     updateStore({ activeRover: event.target.innerHTML });
   render(root, store);
+  carousel();
 });
 
 // ------------------------------------------------------  COMPONENTS
 
 // Pure function that renders conditional information
-const RoverSelector = rovers => {
+const RoverSelector = (rovers, activeRover) => {
   return `
-  <ul>
-    ${rovers.map(rover => `<h3>${rover}</h3>`).join("")}
-  </ul>
+  <nav>
+    ${rovers
+      .map(rover =>
+        rover === activeRover
+          ? `<span class="active">${rover}</span>`
+          : `<span>${rover}</span>`
+      )
+      .join("")}
+  </nav>
   `;
 };
 
@@ -92,35 +103,29 @@ const RoverSelector = rovers => {
 const RoverPhotos = photos => {
   const PhotoElement = photo => {
     return `
-    <li>
-        <img src="${photo.img_src}"/>
-        <span>${photo.earth_date}</span>
-    </li>
-    `;
+        <img class="slide" src="${photo.img_src}"/>
+        `;
   };
+  //  <span>${photo.earth_date}</span>
 
   return `
-    <ul>
         ${photos.map(photo => PhotoElement(photo)).join("")}
-    </ul>
     `;
 };
 
 const RoverManifest = manifest => {
   const ManifestElement = (key, value) => {
     return `
-        <li>
-        ${key}
+        <p>
+        ${key.replace('_', ' ').replace('max', 'latest')}
         <span>${value}</span>
-    </li>`;
+    </p>`;
   };
 
   return `
-    <ul>
         ${Object.entries(manifest)
           .map(([key, value]) => ManifestElement(key, value))
           .join("")}
-    </ul>
     `;
 };
 
@@ -151,3 +156,19 @@ const getRoverManifest = async rover => {
     throw error; // re-throw the error unchanged
   }
 };
+
+// ------------------------------------------------------  CAROUSEL
+let slideIndex = 0;
+
+function carousel() {
+  let x = document.getElementsByClassName("slide");
+  for (let i = 0; i < x.length; i++) {
+    x[i].style.display = "none";
+  }
+  slideIndex++;
+  if (slideIndex > x.length) {
+    slideIndex = 1;
+  }
+  x[slideIndex - 1].style.display = "block";
+  setTimeout(carousel, 3000);
+}
